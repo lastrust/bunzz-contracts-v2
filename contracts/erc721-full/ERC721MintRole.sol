@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 
 
 
-contract ERC1155BurnableAndPausable is ERC721Enumerable, AccessControl{
+contract ERC721MintRole is ERC721Enumerable, AccessControl{
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
