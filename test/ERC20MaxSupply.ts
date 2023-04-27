@@ -28,7 +28,7 @@ describe("ERC20MaxSupply",  ()=>{
         });
     })
 
-    describe("cap", ()=>{
+    describe("maxSupply", ()=>{
         it("should check maxSupply value", async()=>{
             let r = await token.maxSupply();
             expect(r.toString()).to.equal(maxSupply)
