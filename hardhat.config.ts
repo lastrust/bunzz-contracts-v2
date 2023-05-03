@@ -4,7 +4,7 @@ import "hardhat-contract-sizer";
 
 const config: HardhatUserConfig = {
   solidity: {
-    version: "0.8.2",
+    version: "0.8.0",
     settings: {
       optimizer: {
         enabled: true,
