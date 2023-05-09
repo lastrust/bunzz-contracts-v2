@@ -3,7 +3,7 @@ import { expect } from "chai";
 import { Contract, Signer } from "ethers";
 import {SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { AuctionERC721, MockERC721, AuctionERC721__factory, MockERC721__factory } from "../typechain-types";
-
+import { sleep } from "./utils/labs";
 
 
 describe("AuctionERC721", function () {
@@ -26,23 +26,22 @@ describe("AuctionERC721", function () {
 
     it("should create an auction", async function () {
         const tokenId = 1;
-        const minPrice = 1;
-        const buyoutPrice = 2;
-        const startTime = Math.floor(Date.now() / 1000) + 5; // start in 1 second
+        const startPrice = 1;
+        const desiredPrice = 2;
+        const timestamp1 = (await ethers.provider.getBlock("latest")).timestamp;
+        const startTime = timestamp1 + 10;
         const endTime = startTime + 60;
 
         await token.connect(owner).mint(seller.address, tokenId);
-
         await token.connect(seller).approve(auction.address, tokenId);
-
         await expect(
-            auction.connect(seller).createAuction(tokenId, minPrice, buyoutPrice, startTime, endTime)
-        ).to.emit(auction, "CreatedAuction").withArgs(seller.address, tokenId, 1, minPrice, buyoutPrice, startTime, endTime);
+            auction.connect(seller).createAuction(tokenId, startPrice, desiredPrice, startTime, endTime)
+        ).to.emit(auction, "CreatedAuction").withArgs(seller.address, tokenId, 1, startPrice, desiredPrice, startTime, endTime);
 
         const auctionData = await auction.auctions(1);
         expect(auctionData.tokenId).to.equal(tokenId);
-        expect(auctionData.minPrice).to.equal(minPrice);
-        expect(auctionData.buyoutPrice).to.equal(buyoutPrice);
+        expect(auctionData.startPrice).to.equal(startPrice);
+        expect(auctionData.desiredPrice).to.equal(desiredPrice);
         expect(auctionData.seller).to.equal(seller.address);
         expect(auctionData.startTime).to.equal(startTime);
         expect(auctionData.endTime).to.equal(endTime);
@@ -53,110 +52,108 @@ describe("AuctionERC721", function () {
 
     it("should add a bid", async function () {
         const tokenId = 1;
-        const minPrice = 1;
-        const buyoutPrice = 2;
-        const startTime = Math.floor(Date.now() / 1000) + 5; // start in 1 second
+        const startPrice = 1;
+        const desiredPrice = 2;
+        const timestamp1 = (await ethers.provider.getBlock("latest")).timestamp;
+        const startTime = timestamp1 + 10;
         const endTime = startTime + 60;
 
         await token.connect(owner).mint(seller.address, tokenId);
         await token.connect(seller).approve(auction.address, tokenId);
-        await auction.connect(seller).createAuction(tokenId, minPrice, buyoutPrice, startTime, endTime);
+        await auction.connect(seller).createAuction(tokenId, startPrice, desiredPrice, startTime, endTime);
 
-
-
-        await expect(auction.connect(buyer1).addBid(1, { value: minPrice })).to.emit(auction, "AddBid").withArgs(1, buyer1.address, minPrice);
+        await ethers.provider.send("evm_increaseTime", [10]);
+        await expect(auction.connect(buyer1).addBid(1, { value: startPrice })).to.emit(auction, "AddBid").withArgs(1, buyer1.address, startPrice);
 
         const bidData = await auction.bids(1);
         expect(bidData.buyer).to.equal(buyer1.address);
-        expect(bidData.amount).to.equal(minPrice);
+        expect(bidData.amount).to.equal(startPrice);
     });
-    //
-    // it("should not add a bid if auction is closed", async function () {
-    //     const tokenId = 1;
-    //     const minPrice = 1;
-    //     const buyoutPrice = 2;
-    //     const startTime = Math.floor(Date.now() / 1000) - 60; // start 60 seconds ago
-    //     const endTime = startTime + 10;
-    //
-    //     await token.connect(seller).mint(seller.address, tokenId);
-    //     await auction.connect(seller).createAuction(tokenId, minPrice, buyoutPrice, startTime, endTime);
-    //
-    //     await expect(auction.connect(buyer1).addBid(1, { value: minPrice })).to.be.revertedWith("auction is already closed");
-    // });
-    //
-    // it("should not add a bid if bid amount is lower than current highest bid", async function () {
-    //     const tokenId = 1;
-    //     const minPrice = 1;
-    //     const buyoutPrice = 2;
-    //     const startTime = Math.floor(Date.now() / 1000) + 1; // start in 1 second
-    //     const endTime = startTime + 60;
-    //
-    //     await token.connect(seller).mint(seller.address, tokenId);
-    //     await auction.connect(seller).createAuction(tokenId, minPrice, buyoutPrice, startTime, endTime);
-    //
-    //     await auction.connect(buyer1).addBid(1, { value: minPrice });
-    //
-    //     await expect(auction.connect(buyer2).addBid(1, { value: minPrice })).to.be.revertedWith("bit amount <= last bid amount");
-    // });
-    //
-    // it("should update the highest bid if a new bid is higher", async function () {
-    //     const tokenId = 1;
-    //     const minPrice = 1;
-    //     const buyoutPrice = 2;
-    //     const startTime = Math.floor(Date.now() / 1000) + 1; // start in 1 second
-    //     const endTime = startTime + 60;
-    //
-    //     await token.connect(seller).mint(seller.address, tokenId);
-    //     await auction.connect(seller).createAuction(tokenId, minPrice, buyoutPrice, startTime, endTime);
-    //
-    //     await auction.connect(buyer1).addBid(1, { value: minPrice });
-    //
-    //     await expect(auction.connect(buyer2).addBid(1, { value: minPrice + 1 })).to.emit(auction, "AddBid").withArgs(1, buyer2.address, minPrice + 1);
-    //
-    //     const bidData = await auction.bids(1);
-    //     expect(bidData.buyer).to.equal(buyer2.address);
-    //     expect(bidData.amount).to.equal(minPrice + 1);
-    // });
-    //
-    // it("should sell the token if buyout price is reached", async function () {
-    //     const tokenId = 1;
-    //     const minPrice = 1;
-    //     const buyoutPrice = 2;
-    //     const startTime = Math.floor(Date.now() / 1000) + 1; // start in 1 second
-    //     const endTime = startTime + 60;
-    //
-    //     await token.connect(seller).mint(seller.address, tokenId);
-    //     await auction.connect(seller).createAuction(tokenId, minPrice, buyoutPrice, startTime, endTime);
-    //
-    //     await auction.connect(buyer1).addBid(1, { value: buyoutPrice });
-    //
-    //     const ownerOfToken = await token.ownerOf(tokenId);
-    //     expect(ownerOfToken).to.equal(buyer1.address);
-    //
-    //     const bidData = await auction.bids(1);
-    //     expect(bidData.amount).to.equal(buyoutPrice);
-    // });
-    //
-    // it("should return the token if buyout price is not reached and auction is closed", async function () {
-    //     const tokenId = 1;
-    //     const minPrice = 1;
-    //     const buyoutPrice = 2;
-    //     const startTime = Math.floor(Date.now() / 1000) - 60; // start 60 seconds ago
-    //     const endTime = startTime + 10;
-    //
-    //     await token.connect(seller).mint(seller.address, tokenId);
-    //     await auction.connect(seller).createAuction(tokenId, minPrice, buyoutPrice, startTime, endTime);
-    //
-    //     await auction.connect(buyer1).addBid(1, { value: minPrice });
-    //
-    //     await ethers.provider.send("evm_increaseTime", [11]); // fast forward time
-    //
-    //     await auction.connect(seller).claim(1);
-    //
-    //     const ownerOfToken = await token.ownerOf(tokenId);
-    //     expect(ownerOfToken).to.equal(seller.address);
-    // });
-    //
+
+    it("should not add a bid if auction is closed", async function () {
+        const tokenId = 1;
+        const startPrice = 1;
+        const desiredPrice = 2;
+        const timestamp1 = (await ethers.provider.getBlock("latest")).timestamp;
+        const startTime = timestamp1 + 10;
+        const endTime = startTime + 60;
+
+        await token.connect(owner).mint(seller.address, tokenId);
+        await token.connect(seller).approve(auction.address, tokenId);
+        await auction.connect(seller).createAuction(tokenId, startPrice, desiredPrice, startTime, endTime);
+
+        await ethers.provider.send("evm_increaseTime", [3600]);
+
+        await expect(auction.connect(buyer1).addBid(1, { value: startPrice })).to.be.revertedWith("auction is already closed");
+    });
+
+    it("should not add a bid if bid amount is lower than current highest bid", async function () {
+        const tokenId = 1;
+        const startPrice = 1;
+        const desiredPrice = 2;
+        const timestamp1 = (await ethers.provider.getBlock("latest")).timestamp;
+        const startTime = timestamp1 + 10;
+        const endTime = startTime + 60;
+
+        await token.connect(owner).mint(seller.address, tokenId);
+        await token.connect(seller).approve(auction.address, tokenId);
+        await auction.connect(seller).createAuction(tokenId, startPrice, desiredPrice, startTime, endTime);
+
+        await ethers.provider.send("evm_increaseTime", [10]);
+
+        await auction.connect(buyer1).addBid(1, { value: startPrice });
+
+        await expect(auction.connect(buyer2).addBid(1, { value: startPrice })).to.be.revertedWith("bit amount <= last bid amount");
+    });
+
+    it("should update the highest bid if a new bid is higher", async function () {
+        const tokenId = 1;
+        const startPrice = 1;
+        const desiredPrice = 2;
+        const timestamp1 = (await ethers.provider.getBlock("latest")).timestamp;
+        const startTime = timestamp1 + 10;
+        const endTime = startTime + 60;
+
+        await token.connect(owner).mint(seller.address, tokenId);
+        await token.connect(seller).approve(auction.address, tokenId);
+        await auction.connect(seller).createAuction(tokenId, startPrice, desiredPrice, startTime, endTime);
+
+        await ethers.provider.send("evm_increaseTime", [10]);
+
+        await auction.connect(buyer1).addBid(1, { value: startPrice });
+
+        await expect(auction.connect(buyer2).addBid(1, { value: startPrice + 1 })).to.emit(auction, "AddBid").withArgs(1, buyer2.address, startPrice + 1);
+
+        const bidData = await auction.bids(1);
+        expect(bidData.buyer).to.equal(buyer2.address);
+        expect(bidData.amount).to.equal(startPrice + 1);
+    });
+
+
+    it("should return the token if buyout price is not reached and auction is closed", async function () {
+        const tokenId = 1;
+        const startPrice = 1;
+        const desiredPrice = 2;
+        const timestamp1 = (await ethers.provider.getBlock("latest")).timestamp;
+        const startTime = timestamp1 + 10;
+        const endTime = startTime + 60;
+
+        await token.connect(owner).mint(seller.address, tokenId);
+        await token.connect(seller).approve(auction.address, tokenId);
+        await auction.connect(seller).createAuction(tokenId, startPrice, desiredPrice, startTime, endTime);
+
+        await ethers.provider.send("evm_increaseTime", [10]);
+
+        await auction.connect(buyer1).addBid(1, { value: startPrice });
+
+        await ethers.provider.send("evm_increaseTime", [1000]); // fast forward time
+
+        await auction.connect(seller).claim(1);
+
+        const ownerOfToken = await token.ownerOf(tokenId);
+        expect(ownerOfToken).to.equal(seller.address);
+    });
+
     // afterEach(async function () {
     //     const auctionId = await auction.auctionId();
     //     for (let i = 1; i <= auctionId; i++) {
