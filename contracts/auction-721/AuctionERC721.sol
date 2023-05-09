@@ -74,7 +74,7 @@ contract AuctionERC721 is IAuctionERC721, ERC721Holder{
     }
 
     function addBid(uint256 _auctionId) external override payable  {
-        Auction memory auction = auctions[_auctionId];
+        Auction storage auction = auctions[_auctionId];
         require(auction.seller != address(0x0), "auction is not exist");
 
         require(auction.startTime <= uint96(block.timestamp), "auction is not opened");
@@ -103,8 +103,8 @@ contract AuctionERC721 is IAuctionERC721, ERC721Holder{
 
     // seller or winner will call this function
     function claim(uint256 _auctionId) external override {
-        Bid memory bid = bids[_auctionId];
-        Auction memory auction = auctions[_auctionId];
+        Bid memory bid = bids[_auctionId]; // in this case, memory is better than storage.
+        Auction storage auction = auctions[_auctionId]; // in this case, storage is better than memory.
 
         require(msg.sender == bid.buyer || msg.sender == auction.seller, "caller is neither of seller and winner");
         require(auction.endTime < uint96(block.timestamp), "auction is not closed yet");
