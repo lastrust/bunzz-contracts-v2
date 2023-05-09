@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "./interfaces/IAuctionERC1155.sol";
 
 
-contract AuctionERC721 is IAuctionERC1155, ERC1155Holder{
+contract AuctionERC1155 is IAuctionERC1155, ERC1155Holder{
 
     struct Auction{
         uint256 tokenId;
@@ -52,7 +52,7 @@ contract AuctionERC721 is IAuctionERC1155, ERC1155Holder{
         require(nftAmount <= token.balanceOf(msg.sender, tokenId), "token balance is not enough");
         require(desiredPrice > startPrice, "price is invalid");
         require(startPrice > 0, "min price is invalid");
-        require(startTime > currentTime(), "start time is invalid");
+        require(startTime > uint96(block.timestamp), "start time is invalid");
         require(endTime > startTime, "end time is invalid");
 
         Auction memory auction = Auction(
@@ -78,11 +78,11 @@ contract AuctionERC721 is IAuctionERC1155, ERC1155Holder{
     }
 
     function addBid(uint256 _auctionId) external override payable  {
-        Auction memory auction = auctions[_auctionId];
+        Auction storage auction = auctions[_auctionId];
         require(auction.seller != address(0x0), "auction is not exist");
 
-        require(auction.startTime <= currentTime(), "auction is not opened");
-        require(auction.endTime > currentTime(), "auction is already closed");
+        require(auction.startTime <= uint96(block.timestamp), "auction is not opened");
+        require(auction.endTime > uint96(block.timestamp), "auction is already closed");
 
         Bid storage bid = bids[_auctionId];
 
@@ -109,10 +109,10 @@ contract AuctionERC721 is IAuctionERC1155, ERC1155Holder{
     // seller or winner will call this function
     function claim(uint256 _auctionId) external override {
         Bid memory bid = bids[_auctionId];
-        Auction memory auction = auctions[_auctionId];
+        Auction storage auction = auctions[_auctionId];
 
         require(msg.sender == bid.buyer || msg.sender == auction.seller, "caller is neither of seller and winner");
-        require(auction.endTime < currentTime(), "auction is not closed yet");
+        require(auction.endTime < uint96(block.timestamp), "auction is not closed yet");
 
         if (auction.desiredPrice <= bid.amount) { // token is sold
             token.safeTransferFrom(address(this), bid.buyer, auction.tokenId, auction.nftAmount, "");
@@ -131,9 +131,5 @@ contract AuctionERC721 is IAuctionERC1155, ERC1155Holder{
             (bool success, ) = payable(bid.buyer).call{value: bid.amount}("");
             require(success, "Transfer failed");
         }
-    }
-
-    function currentTime() internal view returns(uint96) {
-        return uint96(block.timestamp);
     }
 }
