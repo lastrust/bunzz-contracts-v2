@@ -150,17 +150,6 @@ describe("AuctionERC721", function () {
         const ownerOfToken = await token.ownerOf(tokenId);
         expect(ownerOfToken).to.equal(seller.address);
     });
-
-    // afterEach(async function () {
-    //     const auctionId = await auction.auctionId();
-    //     for (let i = 1; i <= auctionId; i++) {
-    //         const auctionData = await auction.auctions(i);
-    //         const tokenId = auctionData.tokenId;
-    //         if (tokenId != 0) {
-    //             await auction.connect(seller).claim(i);
-    //         }
-    //     }
-    // });
 });
 
 
