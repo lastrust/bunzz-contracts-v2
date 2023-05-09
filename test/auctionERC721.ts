@@ -1,10 +1,7 @@
 import { ethers } from "hardhat";
 import { expect } from "chai";
-import { Contract, Signer } from "ethers";
 import {SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { AuctionERC721, MockERC721, AuctionERC721__factory, MockERC721__factory } from "../typechain-types";
-import { sleep } from "./utils/labs";
-
 
 describe("AuctionERC721", function () {
     let token: MockERC721;
