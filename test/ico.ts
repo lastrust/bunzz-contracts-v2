@@ -79,9 +79,10 @@ describe("ICO", () => {
 
             const amount = ethers.utils.parseEther("1");
             await user.sendTransaction({ to: ico.address, value: amount });
+            await ico.connect(user).buy({value: amount});
 
-            const balance = await token.balanceOf(await user.getAddress());
-            expect(balance).to.equal(amount.mul(10).div(1));
+            const balance = await token.balanceOf(user.address);
+            expect(balance).to.equal(amount.mul(10).mul(2));
         });
     });
 
@@ -91,7 +92,7 @@ describe("ICO", () => {
             await token.transfer(ico.address, amount);
             await ico.connect(deployer).withdrawToken();
 
-            const balance = await token.balanceOf(await deployer.getAddress());
+            const balance = await token.balanceOf(deployer.address);
             expect(balance).to.equal(amount);
         });
     });

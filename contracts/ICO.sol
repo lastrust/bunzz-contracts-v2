@@ -10,8 +10,6 @@ import "./interface/IICO.sol";
 import "./bunzz/IBunzz.sol";
 import "./interface/IERC20WithDecimals.sol";
 
-import "hardhat/console.sol";
-
 contract ICO is IICO, Ownable, IBunzz {
     using SafeERC20 for IERC20WithDecimals;
 
@@ -26,8 +24,8 @@ contract ICO is IICO, Ownable, IBunzz {
 
     constructor (uint128 _startTime, uint128 _endTime) {
         require(_endTime > _startTime, "ICO: time invalid");
-        require(_startTime >= _getCurrentTime(), "ICO: startTime invalid ");
-        require(_endTime > _getCurrentTime(), "ICO: endTime invalid");
+        require(_startTime >= uint128(block.timestamp), "ICO: startTime invalid ");
+        require(_endTime > uint128(block.timestamp), "ICO: endTime invalid");
 
         startTime = _startTime;
         endTime = _endTime;
@@ -58,11 +56,10 @@ contract ICO is IICO, Ownable, IBunzz {
     }
 
     function _buy() private {
-        console.log(block.timestamp, startTime);
         require(address(token) != address(0x0), "ICO: Token is not set yet");
         require(price > 0, "ICO: Price is not set yet");
-        require(_getCurrentTime() >= startTime, "ICO: ICO is not started");
-        require(_getCurrentTime() <= endTime, "ICO: ICO is end");
+        require(uint128(block.timestamp) >= startTime, "ICO: ICO is not started");
+        require(uint128(block.timestamp) <= endTime, "ICO: ICO is end");
 
         uint256 ethAmount = msg.value;
         require(ethAmount > 0, "ICO: ETH amount is invalid");
@@ -79,10 +76,6 @@ contract ICO is IICO, Ownable, IBunzz {
     function withdrawToken() external override onlyOwner {
         require(address(token) != address(0x0), "ICO: Token address is not set yet");
         token.safeTransfer(msg.sender, token.balanceOf(address(this)));
-    }
-
-    function _getCurrentTime() private view returns (uint128) {
-        return uint128(block.timestamp);
     }
 
     fallback() external payable {
