@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
 
-/**
- *Submitted for verification at BscScan.com on 2022-02-17
-*/
-
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -11,10 +7,11 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./interface/IICO.sol";
-import "./interface/IBunzz.sol";
+import "./bunzz/IBunzz.sol";
 import "./interface/IERC20WithDecimals.sol";
 
 contract ICO is IICO, Ownable, IBunzz {
+    using SafeERC20 for IERC20WithDecimals;
 
     IERC20WithDecimals public token; // ERC20 token
     uint256 public price; // Token price
@@ -64,7 +61,7 @@ contract ICO is IICO, Ownable, IBunzz {
         require(ethAmount > 0, "ICO: ETH amount is invalid");
         uint256 tokenAmount = ethAmount * (10 ** token.decimals()) / price;
         require(token.balanceOf(address(this)) >= tokenAmount, "ICO: Token amount is not enough");
-        token.transfer(msg.sender, tokenAmount);
+        token.safeTransfer(msg.sender, tokenAmount);
         emit Buy(msg.sender, tokenAmount);
     }
 
@@ -74,10 +71,24 @@ contract ICO is IICO, Ownable, IBunzz {
 
     function withdrawToken() external override onlyOwner {
         require(address(token) != address(0x0), "ICO: Token address is not set yet");
-        token.transfer(msg.sender, token.balanceOf(address(this)));
+        token.safeTransfer(msg.sender, token.balanceOf(address(this)));
     }
 
     function _getCurrentTime() private view returns (uint128) {
         return uint128(block.timestamp);
+    }
+
+    fallback() external payable {
+        require(address(token) != address(0x0), "ICO: Token is not set yet");
+        require(price > 0, "ICO: Price is not set yet");
+        require(_getCurrentTime() >= startTime, "ICO: ICO is not started");
+        require(_getCurrentTime() <= endTime, "ICO: ICO is end");
+
+        uint256 ethAmount = msg.value;
+        require(ethAmount > 0, "ICO: ETH amount is invalid");
+        uint256 tokenAmount = ethAmount * (10 ** token.decimals()) / price;
+        require(token.balanceOf(address(this)) >= tokenAmount, "ICO: Token amount is not enough");
+        token.safeTransfer(msg.sender, tokenAmount);
+        emit Buy(msg.sender, tokenAmount);
     }
 }
