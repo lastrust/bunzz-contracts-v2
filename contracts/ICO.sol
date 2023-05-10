@@ -10,6 +10,8 @@ import "./interface/IICO.sol";
 import "./bunzz/IBunzz.sol";
 import "./interface/IERC20WithDecimals.sol";
 
+import "hardhat/console.sol";
+
 contract ICO is IICO, Ownable, IBunzz {
     using SafeERC20 for IERC20WithDecimals;
 
@@ -52,6 +54,11 @@ contract ICO is IICO, Ownable, IBunzz {
     }
 
     function buy() external payable override {
+        _buy();
+    }
+
+    function _buy() private {
+        console.log(block.timestamp, startTime);
         require(address(token) != address(0x0), "ICO: Token is not set yet");
         require(price > 0, "ICO: Price is not set yet");
         require(_getCurrentTime() >= startTime, "ICO: ICO is not started");
@@ -79,16 +86,6 @@ contract ICO is IICO, Ownable, IBunzz {
     }
 
     fallback() external payable {
-        require(address(token) != address(0x0), "ICO: Token is not set yet");
-        require(price > 0, "ICO: Price is not set yet");
-        require(_getCurrentTime() >= startTime, "ICO: ICO is not started");
-        require(_getCurrentTime() <= endTime, "ICO: ICO is end");
-
-        uint256 ethAmount = msg.value;
-        require(ethAmount > 0, "ICO: ETH amount is invalid");
-        uint256 tokenAmount = ethAmount * (10 ** token.decimals()) / price;
-        require(token.balanceOf(address(this)) >= tokenAmount, "ICO: Token amount is not enough");
-        token.safeTransfer(msg.sender, tokenAmount);
-        emit Buy(msg.sender, tokenAmount);
+        _buy();
     }
 }
