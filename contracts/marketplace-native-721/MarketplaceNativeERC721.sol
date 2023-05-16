@@ -17,8 +17,6 @@ contract MarketplaceNativeERC721 is Ownable, IMarketplaceNativeERC721 {
         uint256 tokenId;
         uint256 price;
         address currency;
-        bool isSold;
-        bool exist;
     }
 
     mapping(uint256 => Listing) public listings;
@@ -58,14 +56,14 @@ contract MarketplaceNativeERC721 is Ownable, IMarketplaceNativeERC721 {
             "Marketplace: the token is already listed"
         );
 
+        require(price > 0, "Marketplace: the price is zero");
+
         tokensListing[tokenId] = listingId;
 
         Listing memory newListing = Listing(
             tokenId,
             price,
-            address(0),
-            false,
-            true
+            address(0)
         );
 
         listings[listingId] = newListing;
@@ -81,13 +79,14 @@ contract MarketplaceNativeERC721 is Ownable, IMarketplaceNativeERC721 {
     }
 
     function buy(uint256 tokenId) external payable override {
+        require(tokensListing[tokenId] > 0, "Marketplace: list does not exist");
         Listing memory _list = listings[tokensListing[tokenId]];
+        require(_list.price > 0, "Marketplace: list does not exist");
         address tokenOwner = token.ownerOf(tokenId);
         require(
             _list.price == msg.value,
             "Marketplace: The sent value doesn't equal the price"
         );
-        require(_list.isSold == false, "Marketplace: item is already sold");
         require(
             _list.currency == address(0),
             "Marketplace: item currency is not the native one"
@@ -96,9 +95,6 @@ contract MarketplaceNativeERC721 is Ownable, IMarketplaceNativeERC721 {
             tokenOwner != msg.sender,
             "Marketplace: seller has the same address as buyer"
         );
-        require(_list.exist == true, "Marketplace: list does not exist");
-
-        listings[tokensListing[tokenId]].isSold = true;
 
         emit Sold(
             tokenId,
@@ -117,13 +113,14 @@ contract MarketplaceNativeERC721 is Ownable, IMarketplaceNativeERC721 {
         uint256 tokenId,
         uint256 newPrice
     ) external onlyItemOwner(tokenId) {
+        require(tokensListing[tokenId] > 0, "Marketplace: list does not exist");
         Listing storage _list = listings[tokensListing[tokenId]];
-        require(_list.isSold == false, "Marketplace: item is already sold");
+        require(_list.price > 0, "Marketplace: list does not exist");
+        require(newPrice > 0, "Marketplace: the new price is zero");
         require(
             _list.price != newPrice,
             "Marketplace: newPrice is the same as old price"
         );
-        require(_list.exist == true, "Marketplace: list does not exist");
         emit PriceChanged(
             address(token),
             msg.sender,

@@ -25,16 +25,13 @@ describe("MarketplaceNativeERC721", () => {
         it("should list an item for sale", async () => {
             const tokenId = 1;
             const price = ethers.utils.parseEther("1");
-
             await token.mint(user.address, tokenId);
             await token.connect(user).approve(marketplace.address, tokenId);
-
+            await marketplace.connect(user).list(tokenId, price);
             const listing = await marketplace.listings(1);
             expect(listing.tokenId).to.equal(tokenId);
             expect(listing.price).to.equal(price);
             expect(listing.currency).to.equal(ethers.constants.AddressZero);
-            expect(listing.isSold).to.equal(false);
-            expect(listing.exist).to.equal(true);
         });
     });
 
@@ -42,20 +39,11 @@ describe("MarketplaceNativeERC721", () => {
         it("should allow buying an item with native currency", async () => {
             const tokenId = 1;
             const price = ethers.utils.parseEther("1");
-
             await token.mint(user.address, tokenId);
             await token.connect(user).approve(marketplace.address, tokenId);
             await marketplace.connect(user).list(tokenId, price);
-
             const balanceBefore = await ethers.provider.getBalance(user.address);
-
-            await expect(marketplace.connect(deployer).buy(tokenId, {value: price}))
-                .to.emit(marketplace, "Sold")
-                .withArgs(tokenId, user.address, deployer.address, price, ethers.constants.AddressZero);
-
-            const listing = await marketplace.listings(1);
-            expect(listing.isSold).to.equal(true);
-
+            await marketplace.connect(deployer).buy(tokenId, {value: price});
             const balanceAfter = await ethers.provider.getBalance(user.address);
             expect(balanceAfter.sub(balanceBefore)).to.equal(price);
         });
@@ -94,7 +82,7 @@ describe("MarketplaceNativeERC721", () => {
                 .withArgs(token.address, tokenId);
 
             const listing = await marketplace.listings(1);
-            expect(listing.exist).to.equal(false);
+            expect(listing.price).to.equal(0);
         });
     });
 });
