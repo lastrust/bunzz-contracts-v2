@@ -8,10 +8,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 
 contract Vesting is AccessControl, ReentrancyGuard, Pausable {
-
-    bytes32 public constant VESTING_CREATOR = keccak256("VESTING_CREATOR");
-    bytes32 public constant RELEASER = keccak256("RELEASER");
-
     using SafeERC20 for IERC20;
 
     struct VestingSchedule {
@@ -31,7 +27,9 @@ contract Vesting is AccessControl, ReentrancyGuard, Pausable {
         uint256 released;
     }
 
-    // address of the ERC20 token
+    bytes32 public constant VESTING_CREATOR = keccak256("VESTING_CREATOR");
+    bytes32 public constant RELEASER = keccak256("RELEASER");
+
     IERC20 private token;
 
     mapping(address => uint256) private holdersVestingCount;
@@ -39,24 +37,16 @@ contract Vesting is AccessControl, ReentrancyGuard, Pausable {
     bytes32[] private vestingSchedulesIds;
     mapping(bytes32 => VestingSchedule) private vestingSchedules;
 
-
     event Released(uint256 amount);
     event Revoked();
 
-    /**
-    * @dev Reverts if no vesting schedule matches the passed identifier.
-    */
     modifier onlyIfVestingScheduleExists(bytes32 vestingScheduleId) {
-        require(vestingSchedules[vestingScheduleId].start != 0);
+        require(vestingSchedules[vestingScheduleId].start != 0, "TokenVesting: vesting schedule does not exist");
         _;
     }
 
-    /**
-     * @dev Creates a vesting contract.
-     * @param token_ address of the ERC20 token contract
-     */
     constructor(address token_) {
-        require(token_ != address(0));
+        require(token_ != address(0), "TokenVesting: invalid token address");
         token = IERC20(token_);
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _setupRole(VESTING_CREATOR, msg.sender);
@@ -67,71 +57,27 @@ contract Vesting is AccessControl, ReentrancyGuard, Pausable {
 
     fallback() external payable {}
 
-    /**
-    * @dev Returns the number of vesting schedules associated to a beneficiary.
-    * @return the number of vesting schedules
-    */
-    function getVestingSchedulesCountByBeneficiary(address _beneficiary)
-    external
-    view
-    returns (uint256){
+    function getVestingSchedulesCountByBeneficiary(address _beneficiary) external view returns (uint256) {
         return holdersVestingCount[_beneficiary];
     }
 
-    /**
-    * @dev Returns the vesting schedule id at the given index.
-    * @return the vesting id
-    */
-    function getVestingIdAtIndex(uint256 index)
-    external
-    view
-    returns (bytes32){
+    function getVestingIdAtIndex(uint256 index) external view returns (bytes32) {
         require(index < getVestingSchedulesCount(), "TokenVesting: index out of bounds");
         return vestingSchedulesIds[index];
     }
 
-    /**
-    * @notice Returns the vesting schedule information for a given holder and index.
-    * @return the vesting schedule structure information
-    */
-    function getVestingScheduleByAddressAndIndex(address holder, uint256 index)
-    external
-    view
-    returns (VestingSchedule memory){
+    function getVestingScheduleByAddressAndIndex(address holder, uint256 index) external view returns (VestingSchedule memory) {
         return getVestingSchedule(computeVestingScheduleIdForAddressAndIndex(holder, index));
     }
 
-
-    /**
-    * @notice Returns the total amount of vesting schedules.
-    * @return the total amount of vesting schedules
-    */
-    function getVestingSchedulesTotalAmount()
-    external
-    view
-    returns (uint256){
+    function getVestingSchedulesTotalAmount() external view returns (uint256) {
         return vestingSchedulesTotalAmount;
     }
 
-    /**
-    * @dev Returns the address of the ERC20 token managed by the vesting contract.
-    */
-    function getToken()
-    external
-    view
-    returns (address){
+    function getToken() external view returns (address) {
         return address(token);
     }
 
-    /**
-    * @notice Creates a new vesting schedule for a beneficiary.
-    * @param _beneficiary address of the beneficiary to whom vested tokens are transferred
-    * @param _start start time of the vesting period
-    * @param _cliff duration in seconds of the cliff in which tokens will begin to vest
-    * @param _duration duration in seconds of the period in which the tokens will vest
-    * @param _slicePeriodSeconds duration of a slice period for the vesting in seconds
-    * @param _amount total amount of tokens to be released at the end of the vesting
-    */
     function createVestingSchedule(
         address _beneficiary,
         uint256 _start,
@@ -140,17 +86,15 @@ contract Vesting is AccessControl, ReentrancyGuard, Pausable {
         uint256 _slicePeriodSeconds,
         uint256 _amount
     )
-    public
+    external
     whenNotPaused
-    onlyRole(VESTING_CREATOR) {
-        require(
-            this.getWithdrawableAmount() >= _amount,
-            "TokenVesting: cannot create vesting schedule because not sufficient tokens"
-        );
+    onlyRole(VESTING_CREATOR)
+    {
         require(_duration > 0, "TokenVesting: duration must be > 0");
         require(_amount > 0, "TokenVesting: amount must be > 0");
         require(_slicePeriodSeconds >= 1, "TokenVesting: slicePeriodSeconds must be >= 1");
-        bytes32 vestingScheduleId = this.computeNextVestingScheduleIdForHolder(_beneficiary);
+
+        bytes32 vestingScheduleId = computeVestingScheduleIdForAddressAndIndex(_beneficiary, holdersVestingCount[_beneficiary]);
         uint256 cliff = _start + _cliff;
         vestingSchedules[vestingScheduleId] = VestingSchedule(
             _beneficiary,
@@ -161,181 +105,81 @@ contract Vesting is AccessControl, ReentrancyGuard, Pausable {
             _amount,
             0
         );
-        vestingSchedulesTotalAmount = vestingSchedulesTotalAmount + _amount;
+        vestingSchedulesTotalAmount += _amount;
         vestingSchedulesIds.push(vestingScheduleId);
-        uint256 currentVestingCount = holdersVestingCount[_beneficiary];
-        holdersVestingCount[_beneficiary] = currentVestingCount + 1;
+        holdersVestingCount[_beneficiary]++;
     }
 
-    /**
-    * @notice Withdraw the specified amount if possible.
-    * @param amount the amount to withdraw
-    * @param to the address to withdraw amount to
-    */
     function withdraw(uint256 amount, address to)
     public
     nonReentrant
     whenNotPaused
-    onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(this.getWithdrawableAmount() >= amount, "TokenVesting: not enough withdrawable funds");
+    onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(amount <= getWithdrawableAmount(), "TokenVesting: not enough withdrawable funds");
         token.safeTransfer(to, amount);
     }
 
-    /**
-    * @notice Release vested amount of tokens.
-    * @param vestingScheduleId the vesting schedule identifier
-    * @param amount the amount to release
-    */
-    function release(
-        bytes32 vestingScheduleId,
-        uint256 amount
-    )
-    public
-    nonReentrant
-    whenNotPaused
-    onlyIfVestingScheduleExists(vestingScheduleId) {
+    function release(bytes32 vestingScheduleId, uint256 amount) external nonReentrant whenNotPaused onlyIfVestingScheduleExists(vestingScheduleId) {
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
-        bool isBeneficiary = msg.sender == vestingSchedule.beneficiary;
-        bool isReleaser = hasRole(RELEASER, msg.sender);
-        require(
-            isBeneficiary || isReleaser,
-            "TokenVesting: only beneficiary and RELEASER can release vested tokens"
-        );
+        require(msg.sender == vestingSchedule.beneficiary || hasRole(RELEASER, msg.sender), "TokenVesting: only beneficiary and RELEASER can release vested tokens");
+
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
-        require(vestedAmount >= amount, "TokenVesting: cannot release tokens, not enough vested tokens");
-        vestingSchedule.released = vestingSchedule.released + amount;
-        address payable beneficiaryPayable = payable(vestingSchedule.beneficiary);
-        vestingSchedulesTotalAmount = vestingSchedulesTotalAmount - amount;
-        token.safeTransfer(beneficiaryPayable, amount);
+        require(vestedAmount >= amount, "TokenVesting: not enough vested tokens to release");
+
+        vestingSchedule.released += amount;
+        vestingSchedulesTotalAmount -= amount;
+        token.safeTransfer(vestingSchedule.beneficiary, amount);
     }
 
-    /**
-    * @dev Returns the number of vesting schedules managed by this contract.
-    * @return the number of vesting schedules
-    */
-    function getVestingSchedulesCount()
-    public
-    view
-    returns (uint256){
+    function getVestingSchedulesCount() public view returns (uint256) {
         return vestingSchedulesIds.length;
     }
 
-    /**
-    * @notice Computes the vested amount of tokens for the given vesting schedule identifier.
-    * @return the vested amount
-    */
-    function computeReleasableAmount(bytes32 vestingScheduleId)
-    public
-    onlyIfVestingScheduleExists(vestingScheduleId)
-    view
-    returns (uint256){
+    function computeReleasableAmount(bytes32 vestingScheduleId) public onlyIfVestingScheduleExists(vestingScheduleId) view returns (uint256) {
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
         return _computeReleasableAmount(vestingSchedule);
     }
 
-    /**
-    * @notice Returns the vesting schedule information for a given identifier.
-    * @return the vesting schedule structure information
-    */
-    function getVestingSchedule(bytes32 vestingScheduleId)
-    public
-    view
-    returns (VestingSchedule memory){
+    function getVestingSchedule(bytes32 vestingScheduleId) public view returns (VestingSchedule memory) {
         return vestingSchedules[vestingScheduleId];
     }
 
-    /**
-    * @dev Returns the amount of tokens that can be withdrawn by the owner.
-    * @return the amount of tokens
-    */
-    function getWithdrawableAmount()
-    public
-    view
-    returns (uint256){
-        return token.balanceOf(address(this)) - vestingSchedulesTotalAmount;
+    function getWithdrawableAmount() public view returns (uint256) {
+        uint256 contractBalance = token.balanceOf(address(this));
+        return (contractBalance > vestingSchedulesTotalAmount) ? contractBalance - vestingSchedulesTotalAmount : 0;
     }
 
-    /**
-    * @dev Computes the next vesting schedule identifier for a given holder address.
-    */
-    function computeNextVestingScheduleIdForHolder(address holder)
-    public
-    view
-    returns (bytes32){
+    function computeNextVestingScheduleIdForHolder(address holder) public view returns (bytes32) {
         return computeVestingScheduleIdForAddressAndIndex(holder, holdersVestingCount[holder]);
     }
 
-    /**
-    * @dev Returns the last vesting schedule for a given holder address.
-    */
-    function getLastVestingScheduleForHolder(address holder)
-    public
-    view
-    returns (VestingSchedule memory){
+    function getLastVestingScheduleForHolder(address holder) public view returns (VestingSchedule memory) {
         return vestingSchedules[computeVestingScheduleIdForAddressAndIndex(holder, holdersVestingCount[holder] - 1)];
     }
 
-    /**
-    * @dev Computes the vesting schedule identifier for an address and an index.
-    */
-    function computeVestingScheduleIdForAddressAndIndex(address holder, uint256 index)
-    public
-    pure
-    returns (bytes32){
+    function computeVestingScheduleIdForAddressAndIndex(address holder, uint256 index) public pure returns (bytes32) {
         return keccak256(abi.encodePacked(holder, index));
     }
 
-    /**
-    * @dev Computes the releasable amount of tokens for a vesting schedule.
-    * @return the amount of releasable tokens
-    */
-    function _computeReleasableAmount(VestingSchedule memory vestingSchedule)
-    internal
-    view
-    returns (uint256){
+    function _computeReleasableAmount(VestingSchedule storage vestingSchedule) internal view returns (uint256) {
         uint256 currentTime = getCurrentTime();
-        if ((currentTime < vestingSchedule.cliff)) {
+        if (currentTime < vestingSchedule.cliff) {
             return 0;
         } else if (currentTime >= vestingSchedule.start + vestingSchedule.duration) {
             return vestingSchedule.amountTotal - vestingSchedule.released;
         } else {
             uint256 timeFromStart = currentTime - vestingSchedule.start;
-            uint secondsPerSlice = vestingSchedule.slicePeriodSeconds;
+            uint256 secondsPerSlice = vestingSchedule.slicePeriodSeconds;
             uint256 vestedSlicePeriods = timeFromStart / secondsPerSlice;
             uint256 vestedSeconds = vestedSlicePeriods * secondsPerSlice;
-            uint256 vestedAmount = vestingSchedule.amountTotal * vestedSeconds / vestingSchedule.duration;
-            vestedAmount = vestedAmount - vestingSchedule.released;
+            uint256 vestedAmount = (vestingSchedule.amountTotal * vestedSeconds) / vestingSchedule.duration;
+            vestedAmount -= vestingSchedule.released;
             return vestedAmount;
         }
     }
 
-    /**
-    * @notice Release vested amount of tokens to the sender. Caller has to be RELEASER and contract has to be paused. This method is a security measure, should only be called when its required
-    * @param vestingScheduleId the vesting schedule identifier
-    * @param amount the amount to release
-    */
-    function releaseAdmin(
-        bytes32 vestingScheduleId,
-        uint256 amount
-    )
-    public
-    nonReentrant
-    whenPaused
-    onlyRole(RELEASER)
-    onlyIfVestingScheduleExists(vestingScheduleId) {
-        VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
-        uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
-        require(vestedAmount >= amount, "TokenVesting: cannot release tokens, not enough vested tokens");
-        vestingSchedule.released = vestingSchedule.released + amount;
-        vestingSchedulesTotalAmount = vestingSchedulesTotalAmount - amount;
-        token.safeTransfer(msg.sender, amount);
-    }
-
-    function getCurrentTime()
-    internal
-    virtual
-    view
-    returns (uint256){
+    function getCurrentTime() internal view virtual returns (uint256) {
         return block.timestamp;
     }
 

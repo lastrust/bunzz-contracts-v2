@@ -12,7 +12,7 @@ describe("Vesting", () => {
 
     const Decimals = BigNumber.from(18);
     const OneToken = BigNumber.from(10).pow(Decimals);
-    const tokenInitialAmount: BigNumber = BigNumber.from(1000000).mul(OneToken);
+    const tokenInitialAmount: BigNumber = BigNumber.from(1000).mul(OneToken);
 
     beforeEach(async () => {
         [deployer, user] = await ethers.getSigners();
@@ -20,8 +20,7 @@ describe("Vesting", () => {
         const tokenFactory = new MockERC20__factory(deployer);
         token = await tokenFactory.deploy(
             "Test Token",
-            "TEST",
-            tokenInitialAmount
+            "TEST"
         );
 
         const VestingFactory = new Vesting__factory(deployer)
@@ -68,7 +67,7 @@ describe("Vesting", () => {
 
     describe("release()", () => {
         it("should release vested tokens", async () => {
-            const transferAmount = ethers.utils.parseEther("10000");
+            const transferAmount = ethers.utils.parseEther("1000");
             await token.transfer(vesting.address, transferAmount);
 
             // Create a new vesting schedule
@@ -112,7 +111,7 @@ describe("Vesting", () => {
             const cliff = 3600; // 1 hour
             const duration = 3600 * 24; // 1 day
             const slicePeriodSeconds = 3600 * 24; // 1 day
-            const amount = ethers.utils.parseEther("1000");
+            const amount = ethers.utils.parseEther("100");
 
             await vesting.createVestingSchedule(
                 beneficiary,
@@ -129,21 +128,18 @@ describe("Vesting", () => {
             await vesting.release(vestingScheduleId, amount.div(2));
 
             // Get the initial balance before the transfer
-            const initialBalance = await token.balanceOf(deployer.address);
+            const initialBalance = await token.balanceOf(user.address);
 
             // Withdraw tokens from the contract
             const withdrawAmount = ethers.utils.parseEther("500");
-            const recipient = deployer.address;
+            const recipient = user.address;
 
             await vesting.withdraw(withdrawAmount, recipient);
 
             // Assert the withdrawn amount and recipient's balance
-            const finalBalance = await token.balanceOf(deployer.address);
+            const finalBalance = await token.balanceOf(user.address);
             const expectedBalance = initialBalance.add(withdrawAmount);
             expect(finalBalance).to.equal(expectedBalance);
-
-            const recipientBalance = await token.balanceOf(recipient);
-            expect(recipientBalance).to.equal(withdrawAmount);
         });
     });
 
