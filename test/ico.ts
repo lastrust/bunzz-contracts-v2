@@ -13,17 +13,14 @@ describe("ICO", () => {
 
     const Decimals = BigNumber.from(18);
     const OneToken = BigNumber.from(10).pow(Decimals);
-    const tokenInitialAmount: BigNumber = BigNumber.from(1000000).mul(OneToken);
+    const tokenInitialAmount: BigNumber = BigNumber.from(1000).mul(OneToken);
 
     beforeEach(async () => {
         [deployer, user] = await ethers.getSigners();
 
-        const tokenFactory = new MockERC20__factory(deployer);
-        token = await tokenFactory.deploy(
-            "Test Token",
-            "TEST",
-            tokenInitialAmount
-        );
+        const MockTokenFactory = new MockERC20__factory(deployer);
+        token = await MockTokenFactory.deploy("Mock Token", "MTK");
+        await token.deployed();
 
         const icoFactory = new ICO__factory(deployer);
         const timestamp1 = (await ethers.provider.getBlock("latest")).timestamp;
@@ -88,12 +85,13 @@ describe("ICO", () => {
 
     describe("withdrawToken()", () => {
         it("should allow owner to withdraw token", async () => {
-            const amount = ethers.utils.parseEther("1000000");
+            const amount = ethers.utils.parseEther("1000");
+            const balance1 = await token.balanceOf(deployer.address);
             await token.transfer(ico.address, amount);
             await ico.connect(deployer).withdrawToken();
 
-            const balance = await token.balanceOf(deployer.address);
-            expect(balance).to.equal(amount);
+            const balance2 = await token.balanceOf(deployer.address);
+            expect(balance1).to.equal(balance2);
         });
     });
 
