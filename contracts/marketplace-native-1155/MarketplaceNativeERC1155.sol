@@ -109,8 +109,6 @@ contract MarketplaceNativeERC1155 is Ownable, IMarketplaceNativeERC1155 {
             "Marketplace: token amount is not enough in the marketplace"
         );
         token.safeTransferFrom(_list.seller, msg.sender, _list.tokenId, amount, "");
-        payable(_list.seller).transfer(msg.value);
-
         emit Sold(
             _list.tokenId,
             _list.seller,
@@ -124,6 +122,7 @@ contract MarketplaceNativeERC1155 is Ownable, IMarketplaceNativeERC1155 {
         } else {
             _list.amount = _list.amount - amount;
         }
+        payable(_list.seller).transfer(msg.value);
     }
 
     function cancelList(uint256 tokenId) external onlyItemOwner(tokenId) {
@@ -131,7 +130,7 @@ contract MarketplaceNativeERC1155 is Ownable, IMarketplaceNativeERC1155 {
         Listing storage _list = listings[tokensListing[tokenId]];
         require(_list.amount > 0, "Marketplace: tokenId is invalid");
         _removeList(tokenId);
-        CancelListing(tokenId, _list.seller, block.timestamp);
+        emit CancelListing(tokenId, _list.seller, block.timestamp);
     }
 
     function _removeList(uint256 tokenId) internal {
